@@ -1,0 +1,12 @@
+fastapi==0.104.1
+slowapi==0.1.9
+uvicorn==0.24.0
+openai==1.3.0
+# Let pip handle package dependancies
+pydantic 
+python-dotenv==1.0.0
+httpx==0.25.0
+python-multipart==0.0.6
+google-generativeai==0.8.5
+alpaca-py==0.42.0
+pydantic_settings==2.10.1

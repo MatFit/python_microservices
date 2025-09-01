@@ -12,7 +12,7 @@ HEADERS   = {
 
 async def test_root(client: httpx.AsyncClient) -> None:
     resp = await client.get("/")
-    print("ROOT ➜", resp.status_code, resp.json())
+    print("ROOT", resp.status_code, resp.json())
 
 async def test_chat_test(client: httpx.AsyncClient) -> None:
     resp = await client.post(
@@ -24,7 +24,7 @@ async def test_chat_test(client: httpx.AsyncClient) -> None:
             "max_tokens": 5
         },
     )
-    print("GEMINI /test ➜", resp.status_code, resp.json())
+    print("GEMINI /test", resp.status_code, resp.json())
 
 async def test_simple_chat(client: httpx.AsyncClient) -> None:
     resp = await client.post(
@@ -36,7 +36,7 @@ async def test_simple_chat(client: httpx.AsyncClient) -> None:
             "max_tokens": 50
         },
     )
-    print("GEMINI /simple ➜", resp.status_code, resp.json())
+    print("GEMINI /simple", resp.status_code, resp.json())
 
 # Test failed here
 async def test_conversation(client: httpx.AsyncClient) -> None:
@@ -55,7 +55,7 @@ async def test_conversation(client: httpx.AsyncClient) -> None:
             "max_tokens": 100
         },
     )
-    print("GEMINI /conversation ➜", resp.status_code, resp.json())
+    print("GEMINI /conversation", resp.status_code, resp.json())
 
 async def main() -> None:
     async with httpx.AsyncClient(base_url=BASE_URL, headers=HEADERS, timeout=30) as client:

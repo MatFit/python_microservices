@@ -8,13 +8,15 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
-
+# Directory issues best solution rn
 try:
     from app.services.gemini_service import GeminiService
     from app.services.alpaca_service import AlpacaMarketService
+    from app.db import get_ticker_connection, init_ticker_db
 except ImportError:
     from services.gemini_service import GeminiService
     from services.alpaca_service import AlpacaMarketService
+    from db import get_ticker_connection, init_ticker_db
 
 # Misc
 try:
@@ -26,6 +28,7 @@ import logging
 import json
 import uvicorn
 from typing import AsyncGenerator
+
 
 
 # Logging
@@ -58,7 +61,48 @@ async def get_gemini_service() -> GeminiService:
     return GeminiService()
 
 async def get_alpaca_service() -> AlpacaMarketService:
-    return AlpacaMarketService()    
+    return AlpacaMarketService()  
+
+# Dependency injection of databases
+    
+def get_ticker_db():
+    conn = get_ticker_connection()
+    try:
+        yield conn
+    finally:
+        conn.close()
+ 
+
+
+# API startup
+@app.on_event("startup")
+def startup():
+    init_ticker_db()
+
+    conn = get_ticker_connection()
+    cursor = conn.execute("SELECT COUNT(*) FROM tickers")
+    count = cursor.fetchone()[0]
+    
+    if count == 0:
+        # Populate DB
+        alpaca = AlpacaMarketService()
+        tickers = alpaca.fetch_tickers() # fetch tickers with alpaca service
+
+        # Populate
+        conn.executemany(
+            "INSERT INTO tickers (ticker, company_name, exchange) VALUES (?, ?, ?)", 
+                    [(t["ticker"], t["company_name"], t["exchange"]) for t in tickers]
+        )
+        conn.commit()
+    
+    # Checking if anything
+    cursor = conn.execute("SELECT ticker, company_name, exchange FROM tickers ORDER BY id ASC LIMIT 1")
+    row = cursor.fetchone()
+    if row:
+        print(f"Top ticker → {row['ticker']} ({row['company_name']} on {row['exchange']})")
+
+    conn.close()
+
 
 
 
@@ -159,6 +203,17 @@ async def stream_chat( request: Request, conversation_request: ConversationReque
 
 # Alpaca Routes
 # ---------------------------------------------------- #
+@app.get("/alpaca/fetch_tickers")
+@limiter.limit("20/minute")
+async def fetch_markets(request: Request, query: str, limit: int = 5, alpaca_service: AlpacaMarketService = Depends(get_alpaca_service)):
+    try:
+        result = await alpaca_service.get_bundle_of_tickers(query=query, limit_payload=limit)
+        return result
+    except Exception as e:
+        logger.error(f"Error in fetch_markets Alpaca API: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+    
+
 @app.get("/alpaca/fetch_markets")
 @limiter.limit("20/minute")
 async def fetch_markets(request: Request, query: str, limit: int = 5, alpaca_service: AlpacaMarketService = Depends(get_alpaca_service)):

@@ -33,19 +33,43 @@ class AlpacaMarketService:
             self.alpaca_secret_key = settings.alpaca_secret_key
             self.historical_client = StockHistoricalDataClient(self.alpaca_api_key, self.alpaca_secret_key)
             self.trading_client = TradingClient(self.alpaca_api_key, self.alpaca_secret_key)
-            
-            # Single
 
-            
-
-
-            # Cache for popular stocks to avoid repeated API calls
-            self._popular_stocks_cache = None
-            self._cache_timestamp = None
-            self._cache_duration = 3600
-            
-
+            # # Cache for popular stocks to avoid repeated API calls
+            # self._popular_stocks_cache = None
+            # self._cache_timestamp = None
+            # self._cache_duration = 3600
     
+
+    async def get_bundle_of_tickers_temp(self, query: str, limit_payload : int = 10):
+            if not query:
+                return {"results": []}
+
+            query = query.upper().strip()
+            
+            try:
+                assets = self.trading_client.get_all_assets() # BAD FIX THIS
+                matches = []
+
+                for asset in assets:
+                    if (query in asset.symbol.upper() or 
+                        (asset.name and query in asset.name.upper())):
+                        
+                        matches.append({
+                            'ticker': asset.symbol,
+                            'name': asset.name,
+                            'exchange': asset.exchange.value if hasattr(asset.exchange, 'value') else str(asset.exchange),
+                        })
+                        
+                        if len(matches) >= limit_payload:
+                            break
+                
+                return {"results": matches}
+                
+            except Exception as e:
+                print(f"Error fetching from Alpaca: {e}")
+                return {"results": [], "error": str(e)}
+
+
     # TODO: Cache feature so that I can limit API usage this when users are typing in search bar
     async def get_bundle_of_tickers(self, query: str, limit_payload : int = 10):
         if not query:
@@ -116,29 +140,27 @@ class AlpacaMarketService:
     
 
 
-    def refresh_popular_stocks_cache(self):
-        """Manually refresh the popular stocks cache"""
-        self._popular_stocks_cache = None
-        self._cache_timestamp = None
-        return self._get_popular_stocks()
+    # def refresh_popular_stocks_cache(self):
+    #     self._popular_stocks_cache = None
+    #     self._cache_timestamp = None
+    #     return self._get_popular_stocks()
     
 
 
-    def get_cache_status(self):
-        """Get information about the current cache status"""
-        if not self._cache_timestamp:
-            return {"cached": False, "age_seconds": None, "cache_size": 0}
+    # def get_cache_status(self):
+    #     if not self._cache_timestamp:
+    #         return {"cached": False, "age_seconds": None, "cache_size": 0}
         
-        age_seconds = (datetime.now() - self._cache_timestamp).seconds
-        cache_size = len(self._popular_stocks_cache) if self._popular_stocks_cache else 0
+    #     age_seconds = (datetime.now() - self._cache_timestamp).seconds
+    #     cache_size = len(self._popular_stocks_cache) if self._popular_stocks_cache else 0
         
-        return {
-            "cached": True,
-            "age_seconds": age_seconds,
-            "cache_duration": self._cache_duration,
-            "cache_size": cache_size,
-            "will_expire_in": max(0, self._cache_duration - age_seconds)
-        }
+    #     return {
+    #         "cached": True,
+    #         "age_seconds": age_seconds,
+    #         "cache_duration": self._cache_duration,
+    #         "cache_size": cache_size,
+    #         "will_expire_in": max(0, self._cache_duration - age_seconds)
+    #     }
 
 
 

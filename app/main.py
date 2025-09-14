@@ -76,7 +76,7 @@ def get_ticker_db():
 
 # API startup
 @app.on_event("startup")
-def startup():
+async def startup():
     init_ticker_db()
 
     conn = get_ticker_connection()
@@ -86,8 +86,9 @@ def startup():
     if count == 0:
         # Populate DB
         alpaca = AlpacaMarketService()
-        tickers = alpaca.fetch_tickers() # fetch tickers with alpaca service
-
+        ticker_data = await alpaca.fetch_all_tickers() # fetch tickers with alpaca service
+        tickers = ticker_data["results"]
+        print(ticker_data)
         # Populate
         conn.executemany(
             "INSERT INTO tickers (ticker, company_name, exchange) VALUES (?, ?, ?)", 
@@ -95,7 +96,7 @@ def startup():
         )
         conn.commit()
     
-    # Checking if anything
+    # # Checking if anything
     cursor = conn.execute("SELECT ticker, company_name, exchange FROM tickers ORDER BY id ASC LIMIT 1")
     row = cursor.fetchone()
     if row:

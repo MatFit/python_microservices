@@ -40,34 +40,22 @@ class AlpacaMarketService:
             # self._cache_duration = 3600
     
 
-    async def get_bundle_of_tickers_temp(self, query: str, limit_payload : int = 10):
-            if not query:
-                return {"results": []}
-
-            query = query.upper().strip()
-            
-            try:
-                assets = self.trading_client.get_all_assets() # BAD FIX THIS
-                matches = []
-
-                for asset in assets:
-                    if (query in asset.symbol.upper() or 
-                        (asset.name and query in asset.name.upper())):
-                        
+    async def fetch_all_tickers(self):
+        matches = []
+        try:
+            assets = self.trading_client.get_all_assets()
+            for asset in assets:
+                    if asset.symbol and asset.name and asset.exchange.value:
                         matches.append({
                             'ticker': asset.symbol,
-                            'name': asset.name,
+                            'company_name': asset.name,
                             'exchange': asset.exchange.value if hasattr(asset.exchange, 'value') else str(asset.exchange),
                         })
-                        
-                        if len(matches) >= limit_payload:
-                            break
-                
-                return {"results": matches}
-                
-            except Exception as e:
-                print(f"Error fetching from Alpaca: {e}")
-                return {"results": [], "error": str(e)}
+            return {"results": matches}
+            
+        except Exception as e:
+            print(f"Error fetching from Alpaca: {e}")
+            return {"results": [], "error": str(e)}
 
 
     # TODO: Cache feature so that I can limit API usage this when users are typing in search bar

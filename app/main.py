@@ -1,3 +1,28 @@
+# CRITICAL: Add Python path fix FIRST - before ANY other imports
+import sys
+from pathlib import Path
+
+# Add the app directory to Python path
+app_dir = Path(__file__).parent
+sys.path.insert(0, str(app_dir))
+
+# Now your regular imports
+import os
+import logging
+import json
+import uvicorn
+from typing import AsyncGenerator
+
+# Directory issues best solution rn
+try:
+    from app.services.gemini_service import GeminiService
+    from app.services.alpaca_service import AlpacaMarketService
+    from app.db import SQLitePool, DB_FILE, db_pool, get_ticker_db_connection, search_tickers_db
+except ImportError:
+    from services.gemini_service import GeminiService
+    from services.alpaca_service import AlpacaMarketService
+    from db import SQLitePool, DB_FILE, db_pool, get_ticker_db_connection, search_tickers_db
+
 # FastAPI for Gemini AI req
 from fastapi import FastAPI, Request, HTTPException, Depends
 from fastapi.responses import StreamingResponse
@@ -8,28 +33,13 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
-# Directory issues best solution rn
-try:
-    from app.services.gemini_service import GeminiService
-    from app.services.alpaca_service import AlpacaMarketService
-    from app.db import get_ticker_connection, init_ticker_db
-except ImportError:
-    from services.gemini_service import GeminiService
-    from services.alpaca_service import AlpacaMarketService
-    from db import get_ticker_connection, init_ticker_db
-
 # Misc
 try:
     from app.models import *
 except ImportError:
     from models import *
 
-import logging
-import json
-import uvicorn
-from typing import AsyncGenerator
-
-
+# Rest of your code goes here...
 
 # Logging
 logging.basicConfig(level=logging.INFO)
@@ -40,7 +50,6 @@ logger = logging.getLogger(__name__)
 app = FastAPI (
     version="1.0.0"
 )
-
 # Rate Limiter (# of API calls)
 limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
@@ -55,7 +64,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
 # Dependency injection of services
 async def get_gemini_service() -> GeminiService:
     return GeminiService()
@@ -63,32 +71,21 @@ async def get_gemini_service() -> GeminiService:
 async def get_alpaca_service() -> AlpacaMarketService:
     return AlpacaMarketService()  
 
-# Dependency injection of databases
-    
-def get_ticker_db():
-    conn = get_ticker_connection()
-    try:
-        yield conn
-    finally:
-        conn.close()
- 
-
 
 # API startup
 @app.on_event("startup")
 async def startup():
-    init_ticker_db()
 
-    conn = get_ticker_connection()
-    cursor = conn.execute("SELECT COUNT(*) FROM tickers")
-    count = cursor.fetchone()[0]
+    with db_pool.get_connection() as conn:
+        cursor = conn.execute("SELECT COUNT(*) FROM tickers")
+        count = cursor.fetchone()[0]
     
     if count == 0:
+        print("Populating ticker DB for the first time...")
         # Populate DB
         alpaca = AlpacaMarketService()
         ticker_data = await alpaca.fetch_all_tickers() # fetch tickers with alpaca service
         tickers = ticker_data["results"]
-        print(ticker_data)
         # Populate
         conn.executemany(
             "INSERT INTO tickers (ticker, company_name, exchange) VALUES (?, ?, ?)", 
@@ -96,14 +93,13 @@ async def startup():
         )
         conn.commit()
     
-    # # Checking if anything
-    cursor = conn.execute("SELECT ticker, company_name, exchange FROM tickers ORDER BY id ASC LIMIT 1")
-    row = cursor.fetchone()
-    if row:
-        print(f"Top ticker → {row['ticker']} ({row['company_name']} on {row['exchange']})")
+    # Checking if anything
+    # cursor = conn.execute("SELECT ticker, company_name, exchange FROM tickers LIMIT 100")
+    # row = cursor.fetchall()
+    # for i, r in enumerate(row):
+    #     print(f"Index {i} : {r['ticker']},({r['company_name']}, {r['exchange']})")
 
     conn.close()
-
 
 
 
@@ -117,9 +113,6 @@ async def root():
 async def health_check():
     """Health check endpoint"""
     return {"status": "healthy", "service": "Gemini FastAPI Integration"}
-
-
-
 
 
 
@@ -282,6 +275,35 @@ async def fetch_company_historical_bars(request: Request):
 
 
 
+
+# ---------------------------------------------------- #
+
+
+
+
+# Misc Routes
+# ---------------------------------------------------- #
+
+# Design an endpoint to get ticker symbols when using the search bar feature in the front end
+@app.get("/tickers/search")
+async def search_tickers(request: Request, query: str, limit: int = 10):
+    if not query:
+        return {"results": []}
+        
+    query = query.upper().strip()
+    
+    # Use the helper function instead of dependency
+    rows = search_tickers_db(query, limit)
+    
+    results = []
+    for row in rows:
+        results.append({
+            "ticker": row["ticker"],
+            "company_name": row["company_name"],
+            "exchange": row["exchange"]
+        })
+    
+    return {"results": results}
 
 # ---------------------------------------------------- #
 

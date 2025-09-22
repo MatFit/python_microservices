@@ -17,11 +17,11 @@ from typing import AsyncGenerator
 try:
     from app.services.gemini_service import GeminiService
     from app.services.alpaca_service import AlpacaMarketService
-    from app.db import SQLitePool, DB_FILE, db_pool, get_ticker_db_connection, search_tickers_db
+    from app.db import SQLitePool, DB_FILE, db_pool, get_ticker_db_connection, search_tickers_db, TickerDB
 except ImportError:
     from services.gemini_service import GeminiService
     from services.alpaca_service import AlpacaMarketService
-    from db import SQLitePool, DB_FILE, db_pool, get_ticker_db_connection, search_tickers_db
+    from db import SQLitePool, DB_FILE, db_pool, get_ticker_db_connection, search_tickers_db, TickerDB
 
 # FastAPI for Gemini AI req
 from fastapi import FastAPI, Request, HTTPException, Depends
@@ -70,6 +70,9 @@ async def get_gemini_service() -> GeminiService:
 
 async def get_alpaca_service() -> AlpacaMarketService:
     return AlpacaMarketService()  
+
+async def ticker_db_object() -> TickerDB:
+    return TickerDB(db_pool, DB_FILE)
 
 
 # API startup
@@ -293,7 +296,8 @@ async def search_tickers(request: Request, query: str, limit: int = 10):
     query = query.upper().strip()
     
     # Use the helper function instead of dependency
-    rows = search_tickers_db(query, limit)
+    ticker_db = await ticker_db_object()
+    rows = ticker_db.search_tickers_db(query=query, limit=limit)
     
     results = []
     for row in rows:
